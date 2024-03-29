@@ -147,28 +147,65 @@ def api_call(rgv):
 
     return body, error
 
-def find_realm_name(search_string):
+def valid_response(body):
+    """ Validate JSON has required keys """
+
+    if not body:
+        return False
+
+    if not 'data' in body:
+        return False
+
+    if not 'Realms' in body['data']:
+        return False
+
+    return True
+
+def choose_realm(realms):
+    """ choose the right realm to use """
+
+    for realm in realms:
+        print(f'{realms.index(realm) + 1}) {realm["name"]} {realm["rgv"]}')
+
+    choice = None
+    while choice is None:
+        i = input(f'Choose your Realm [1-{len(realms)}]: ')
+        try:
+            i = int(i) - 1
+        except ValueError:
+            i = 0
+
+        if 0 <= i < len(realms):
+            choice = i
+            continue
+
+        print('Invalid Option.')
+
+    return realms[choice]['name'], realms[choice]['rgv']
+
+def find_realms(search_string):
     """ find a realm by name """
 
-    for r in REGIONS:
-        for gv in GAMEVERSIONS:
-            rgv = get_rgv(r, gv)
-            body, error = api_call(rgv)
+    rgvs   = [get_rgv(r,gv) for r in REGIONS for gv in GAMEVERSIONS]
+    realms = []
 
-            if error:
-                print(f'{error} while searching connected realms.')
-                return None, None
+    for rgv in rgvs:
+        body, error = api_call(rgv)
 
-            if not 'data' in body or not 'Realms' in body['data']:
-                return None, None
+        if error:
+            print(f'{error} while searching connected realms.')
+            return realms
 
-            for rlm in body['data']['Realms']:
-                name = rlm['name']
+        if not valid_response(body):
+            return realms
 
-                if simple_string(name) == search_string:
-                    return name, rgv
+        for rlm in body['data']['Realms']:
+            name = rlm['name']
 
-    return None, None
+            if simple_string(name) == search_string:
+                realms.append({'name': name, 'rgv': rgv})
+
+    return realms
 
 def find_realm():
     """ gets realm info for config """
@@ -176,14 +213,24 @@ def find_realm():
     if realm_name() != '':
         return
 
+    clear_screen()
     rlm_name = None
     msg = 'Enter your realm name: '
     while rlm_name is None:
-        clear_screen()
         rlm = input(msg)
         rlm = simple_string(rlm)
-        rlm_name, rgv = find_realm_name(rlm)
-        msg = 'Realm name not found. Enter your realm name: '
+        realms = find_realms(rlm)
+
+        if len(realms) == 0:
+            msg = 'Realm name not found. Enter your realm name: '
+            continue
+
+        if len(realms) == 1:
+            rlm_name = realms[0]['name']
+            rgv = realms[0]['rgv']
+            continue
+
+        rlm_name, rgv = choose_realm(realms)
 
     config.set('REALM', 'name', rlm_name)
     config.set('REALM', 'region_game_version', rgv)
@@ -198,6 +245,8 @@ def check_status():
 
     i=0
     while True:
+        time.sleep(SLEEP)
+
         online = False
         body, error = api_call(region_game_version())
 
@@ -205,7 +254,7 @@ def check_status():
             name = 'ERROR'
             status = error
 
-        if not body:
+        if not valid_response(body):
             continue
 
         for rlm in body['data']['Realms']:
@@ -227,7 +276,6 @@ def check_status():
 
         print(f'{CLEARLINE}', end='')
         print(f'{NOCURSOR}{progress}{color} {name}: {status}{BColors.ENDC}', end='\r', flush=True)
-        time.sleep(SLEEP)
 
 load_config()
 find_realm()
