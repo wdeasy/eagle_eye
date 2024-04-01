@@ -165,25 +165,39 @@ def print_line(msg):
     """ print a message on the same line """
 
     print(f'{CLEARLINE}', end='')
-    print(f'{NOCURSOR}{msg}{BColors.ENDC}', end='\r', flush=True)
+    print(f'{NOCURSOR}{msg}', end='\r', flush=True)
 
 def progress(i):
     """ prints a progress indicator """
 
     return PROGRESS[i % 4]
 
+def green_text(text):
+    """ highlights text in green """
+
+    return f'{BColors.OKGREEN}{text}{BColors.ENDC}'
+
+def red_text(text):
+    """ highlights text in red """
+
+    return f'{BColors.FAIL}{text}{BColors.ENDC}'
+
 def choose_realm(realms):
     """ choose the right realm to use """
 
     none = len(realms) + 1
 
+    print('\nRESULTS:')
     for realm in realms:
-        print(f'{realms.index(realm) + 1}) {realm["name"]} {realm["rgv"]}')
-    print(f'{none}) None')
+        num = green_text(realms.index(realm) + 1)
+        category = realm['category'] + ' ' + realm['rgv'][-2:].upper()
+        print(f'[{num}] {realm["name"]} ({category})')
+    print(f'[{green_text(none)}] None\n')
 
     choice = None
     while choice is None:
-        i = input(f'Choose your Realm [1-{none}]: ')
+        opts = green_text(f'1-{none}')
+        i = input(f'Choose your Realm [{opts}]: ')
         try:
             i = int(i)
         except ValueError:
@@ -210,12 +224,13 @@ def build_realm_list():
 
     clear_screen()
 
+    msg = green_text('Building realm list')
     i=0
     for rgv in rgvs:
         i+=1
         time.sleep(SLEEP/2)
 
-        print_line(f'{progress(i)} {BColors.OKGREEN}Building realm list')
+        print_line(f'{progress(i)} {msg}')
 
         body, error = api_call(rgv)
 
@@ -229,7 +244,8 @@ def build_realm_list():
 
         for rlm in body['data']['Realms']:
             name = rlm['name']
-            realm_list.append({'name': name, 'rgv': rgv})
+            category = rlm['category']
+            realm_list.append({'name': name, 'rgv': rgv, 'category': category})
 
     return realm_list
 
@@ -241,9 +257,10 @@ def find_realms(search_string, realm_list):
     for rlm in realm_list:
         name = rlm['name']
         rgv  = rlm['rgv']
+        category = rlm['category']
 
         if simple_string(name) == search_string:
-            realms.append({'name': name, 'rgv': rgv})
+            realms.append({'name': name, 'rgv': rgv, 'category': category})
 
     return realms
 
@@ -259,8 +276,8 @@ def find_realm():
     msg = 'Enter your realm name: '
     while rlm_name is None:
         clear_screen()
-        rlm = input(msg)
-        rlm = simple_string(rlm)
+        rlm    = input(msg)
+        rlm    = simple_string(rlm)
         realms = find_realms(rlm, realm_list)
 
         if len(realms) == 0:
@@ -269,7 +286,7 @@ def find_realm():
 
         if len(realms) == 1:
             rlm_name = realms[0]['name']
-            rgv = realms[0]['rgv']
+            rgv      = realms[0]['rgv']
             continue
 
         rlm_name, rgv = choose_realm(realms)
@@ -294,8 +311,8 @@ def check_status():
         body, error = api_call(region_game_version())
 
         if error:
-            name = 'ERROR'
-            status = error
+            name   = red_text('ERROR')
+            status = red_text(error)
 
         if not valid_response(body):
             continue
@@ -304,17 +321,16 @@ def check_status():
             if rlm['name'] != realm_name():
                 continue
 
-            name = realm_name()
+            name   = red_text(realm_name())
             online = bool(rlm['online'])
 
-        color  = BColors.FAIL
-        status = 'DOWN'
+        status = red_text('DOWN')
 
         if online:
-            color  = BColors.OKGREEN
-            status = 'UP'
+            name   = green_text(realm_name())
+            status = green_text('UP')
 
-        print_line(f'{progress(i)} {color}{name}: {status}')
+        print_line(f'{progress(i)} {name}: {status}')
 
 load_config()
 find_realm()
