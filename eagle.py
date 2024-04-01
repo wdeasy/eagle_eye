@@ -161,20 +161,39 @@ def valid_response(body):
 
     return True
 
+def print_line(msg):
+    """ print a message on the same line """
+
+    print(f'{CLEARLINE}', end='')
+    print(f'{NOCURSOR}{msg}{BColors.ENDC}', end='\r', flush=True)
+
+def progress(i):
+    """ prints a progress indicator """
+
+    return PROGRESS[i % 4]
+
 def choose_realm(realms):
     """ choose the right realm to use """
 
+    none = len(realms) + 1
+
     for realm in realms:
         print(f'{realms.index(realm) + 1}) {realm["name"]} {realm["rgv"]}')
+    print(f'{none}) None')
 
     choice = None
     while choice is None:
-        i = input(f'Choose your Realm [1-{len(realms)}]: ')
+        i = input(f'Choose your Realm [1-{none}]: ')
         try:
-            i = int(i) - 1
+            i = int(i)
         except ValueError:
             i = 0
 
+        if i == none:
+            clear_screen()
+            return None, None
+
+        i-=1
         if 0 <= i < len(realms):
             choice = i
             continue
@@ -183,27 +202,48 @@ def choose_realm(realms):
 
     return realms[choice]['name'], realms[choice]['rgv']
 
-def find_realms(search_string):
-    """ find a realm by name """
+def build_realm_list():
+    """ build a list of realm names """
 
     rgvs   = [get_rgv(r,gv) for r in REGIONS for gv in GAMEVERSIONS]
-    realms = []
+    realm_list = []
 
+    clear_screen()
+
+    i=0
     for rgv in rgvs:
+        i+=1
+        time.sleep(SLEEP/2)
+
+        print_line(f'{progress(i)} {BColors.OKGREEN}Building realm list')
+
         body, error = api_call(rgv)
 
         if error:
-            print(f'{error} while searching connected realms.')
-            return realms
+            print(f'{error} while building realm list. ({rgv})')
+            continue
 
         if not valid_response(body):
-            return realms
+            print(f'Invalid response while building realm list. ({rgv})')
+            continue
 
         for rlm in body['data']['Realms']:
             name = rlm['name']
+            realm_list.append({'name': name, 'rgv': rgv})
 
-            if simple_string(name) == search_string:
-                realms.append({'name': name, 'rgv': rgv})
+    return realm_list
+
+def find_realms(search_string, realm_list):
+    """ find a realm by name """
+
+    realms = []
+
+    for rlm in realm_list:
+        name = rlm['name']
+        rgv  = rlm['rgv']
+
+        if simple_string(name) == search_string:
+            realms.append({'name': name, 'rgv': rgv})
 
     return realms
 
@@ -213,13 +253,15 @@ def find_realm():
     if realm_name() != '':
         return
 
-    clear_screen()
+    realm_list = build_realm_list()
+
     rlm_name = None
     msg = 'Enter your realm name: '
     while rlm_name is None:
+        clear_screen()
         rlm = input(msg)
         rlm = simple_string(rlm)
-        realms = find_realms(rlm)
+        realms = find_realms(rlm, realm_list)
 
         if len(realms) == 0:
             msg = 'Realm name not found. Enter your realm name: '
@@ -245,6 +287,7 @@ def check_status():
 
     i=0
     while True:
+        i+=1
         time.sleep(SLEEP)
 
         online = False
@@ -264,9 +307,6 @@ def check_status():
             name = realm_name()
             online = bool(rlm['online'])
 
-        progress = PROGRESS[i % 4]
-        i+=1
-
         color  = BColors.FAIL
         status = 'DOWN'
 
@@ -274,8 +314,7 @@ def check_status():
             color  = BColors.OKGREEN
             status = 'UP'
 
-        print(f'{CLEARLINE}', end='')
-        print(f'{NOCURSOR}{progress}{color} {name}: {status}{BColors.ENDC}', end='\r', flush=True)
+        print_line(f'{progress(i)} {color}{name}: {status}')
 
 load_config()
 find_realm()
